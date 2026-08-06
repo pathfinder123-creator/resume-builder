@@ -226,6 +226,7 @@
   .r-ul li{margin-bottom:2px;}
   .r-empty{color:#9AA1AA;font-style:italic;}
   .r-p{margin:0 0 4px 0;}
+  .r-proj-title{font-weight:700;font-size:10.2pt;margin:8px 0 0 0;}
 
   .save-status{font-size:0.72rem;color:var(--slate);font-family:var(--mono);}
   .save-status button{background:none;border:none;color:var(--teal-dark);text-decoration:underline;font-size:0.72rem;font-family:var(--mono);padding:0;margin-left:8px;}
@@ -287,6 +288,8 @@ const GUIDING = {
   competencies: "Higher-level abilities that blend skill + experience + judgment (e.g., Data-Driven Decision Support, Cross-Team Coordination).",
   expBullets: "One line per bullet. Mix: (1) specific tasks/responsibilities, (2) accomplishments — quantify if you can (numbers, %, $, time), and (3) any above-and-beyond moments.",
   eduFocus: "The specific focus of your program, relevant coursework, or honors — one short line is plenty.",
+  projectDescription: "One or two sentences on what the project was and why it mattered — the context a reader needs before the bullets.",
+  projectBullets: "3–5 bullets. Emphasize actions you took and measurable results (numbers, %, scope, audience reached) rather than just a task list.",
   leadBullets: "One line per bullet: what you accomplished, contributed, or the honor you received.",
   additional: "Only include what's not already covered above. If a technical skill or certification is directly relevant to the job you want, it usually belongs in Summary or Education instead."
 };
@@ -448,6 +451,7 @@ let state = {
   coreSkills: "", keyStrengths: "", competencies: "",
   experience: {}, experienceOrder: [],
   education: {}, educationOrder: [],
+  projects: {}, projectsOrder: [],
   leadership: {}, leadershipOrder: [],
   additional: { technical:"", other:"", quals:"", interests:"" },
   jobPosting: ""
@@ -455,6 +459,7 @@ let state = {
 
 function freshExperience(){ return {employer:"",location:"",title:"",dates:"",bullets:""}; }
 function freshEducation(){ return {institution:"",location:"",gradDate:"",degree:"",focus:""}; }
+function freshProject(){ return {title:"",org:"",role:"",dates:"",description:"",bullets:""}; }
 function freshLeadership(){ return {org:"",location:"",dates:"",role:"",bullets:""}; }
 
 /* seed one blank row of each so the form isn't empty on first load */
@@ -478,7 +483,14 @@ function persist(){
 function loadFromStorage(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){ state = JSON.parse(raw); return true; }
+    if(raw){
+      const parsed = JSON.parse(raw);
+      state = Object.assign({}, state, parsed);
+      // patch in any fields added to the tool after this draft was saved
+      if(!state.projects) state.projects = {};
+      if(!state.projectsOrder) state.projectsOrder = [];
+      return true;
+    }
   }catch(err){}
   return false;
 }
@@ -522,6 +534,7 @@ function clearData(){
     contact:{name:"",cityState:"",phone:"",email:"",linkedin:""},
     summary:"", coreSkills:"", keyStrengths:"", competencies:"",
     experience:{}, experienceOrder:[], education:{}, educationOrder:[],
+    projects:{}, projectsOrder:[],
     leadership:{}, leadershipOrder:[],
     additional:{technical:"",other:"",quals:"",interests:""},
     jobPosting:""
@@ -658,6 +671,7 @@ function buildResumeText(){
     state.additional.technical, state.additional.other, state.additional.quals, state.additional.interests];
   state.experienceOrder.forEach(id => { const e=state.experience[id]; parts.push(e.title, e.employer, e.bullets); });
   state.educationOrder.forEach(id => { const e=state.education[id]; parts.push(e.degree, e.institution, e.focus); });
+  state.projectsOrder.forEach(id => { const p=state.projects[id]; parts.push(p.title, p.org, p.role, p.description, p.bullets); });
   state.leadershipOrder.forEach(id => { const e=state.leadership[id]; parts.push(e.role, e.org, e.bullets); });
   return parts.join(" ").toLowerCase();
 }
@@ -724,6 +738,20 @@ function buildResumeInnerHTML(){
     if(e.focus) html += '<ul class="r-ul"><li>'+esc(e.focus)+'</li></ul>';
   });
 
+  if(state.projectsOrder.length && state.projectsOrder.some(id=>{const p=state.projects[id];return p.title||p.org||p.bullets;})){
+    html += sectionHeading("PROJECTS");
+    state.projectsOrder.forEach(id => {
+      const p = state.projects[id];
+      if(!p.title && !p.org && !p.bullets) return;
+      html += '<p class="r-proj-title">'+esc(p.title||"Project Title")+'</p>';
+      const metaLine = [p.role, p.org, p.dates].filter(Boolean).join(" | ");
+      if(metaLine) html += '<div class="r-title">'+esc(metaLine)+'</div>';
+      if(p.description) html += '<p class="r-p">'+esc(p.description)+'</p>';
+      const bl = lines(p.bullets);
+      if(bl.length) html += '<ul class="r-ul">'+bl.map(b=>'<li>'+esc(b)+'</li>').join("")+'</ul>';
+    });
+  }
+
   if(state.leadershipOrder.length && state.leadershipOrder.some(id=>{const e=state.leadership[id];return e.org||e.role||e.bullets;})){
     html += sectionHeading("LEADERSHIP, COMMUNITY SERVICE, RECOGNITION");
     state.leadershipOrder.forEach(id => {
@@ -767,6 +795,7 @@ function buildWordDocument(){
     .replace(/class="r-title"/g,'style="font-style:italic;font-size:10.5pt;margin:1px 0 3px 0;font-family:Aptos,Arial,sans-serif;"')
     .replace(/class="r-ul"/g,'style="margin:2px 0 8px 0;padding-left:18px;font-size:10.5pt;font-family:Aptos,Arial,sans-serif;"')
     .replace(/class="r-p"/g,'style="margin:0 0 8px 0;font-size:10.5pt;font-family:Aptos,Arial,sans-serif;"')
+    .replace(/class="r-proj-title"/g,'style="font-weight:bold;font-size:10.5pt;margin:8px 0 0 0;font-family:Aptos,Arial,sans-serif;"')
     .replace(/r-empty/g,"");
   return "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>"
     + "<head><meta charset='utf-8'><title>Resume</title>"
@@ -795,6 +824,7 @@ const TABS = [
   {id:"summary", label:"Summary & Skills", required:true},
   {id:"experience", label:"Experience", required:true},
   {id:"education", label:"Education", required:true},
+  {id:"projects", label:"Projects", required:false},
   {id:"leadership", label:"Leadership & Involvement", required:false},
   {id:"additional", label:"Additional Info", required:false},
   {id:"job", label:"Target Job", required:false},
@@ -807,6 +837,7 @@ function isTabComplete(id){
     case "summary": return !!state.summary.trim();
     case "experience": return state.experienceOrder.some(i=>state.experience[i].employer && state.experience[i].title);
     case "education": return state.educationOrder.some(i=>state.education[i].institution);
+    case "projects": return state.projectsOrder.some(i=>state.projects[i].title);
     case "leadership": return state.leadershipOrder.some(i=>state.leadership[i].org);
     case "additional": {const a=state.additional; return !!(a.technical||a.other||a.quals||a.interests);}
     case "job": return !!state.jobPosting.trim();
@@ -968,6 +999,34 @@ function renderEducationTab(){
   return html;
 }
 
+function projectCard(id, index){
+  const p = state.projects[id];
+  return '<div class="entry-card"><div class="entry-head"><span class="entry-num">PROJECT '+(index+1)+'</span>'
+    + '<button type="button" class="btn-remove" onclick="removeEntry(\'projects\',\''+id+'\')">Remove</button>'
+    + '</div>'
+    + fieldInput("Project title","projects."+id+".title",p.title,"Career Exploration Web Tool")
+    + '<div class="field-row">'
+    + fieldInput("Organization or client","projects."+id+".org",p.org,"Collin College Career Center")
+    + fieldInput("Your role","projects."+id+".role",p.role,"Project Lead")
+    + '</div>'
+    + fieldInput("Dates","projects."+id+".dates",p.dates,"2026")
+    + '<label for="proj-desc-'+id+'">Brief description</label>'
+    + '<div class="hint">'+GUIDING.projectDescription+'</div>'
+    + '<textarea id="proj-desc-'+id+'" data-path="projects.'+id+'.description" rows="2" placeholder="Designed an interactive tool to help students explore careers aligned with their interests.">'+esc(p.description)+'</textarea>'
+    + '<label for="proj-bul-'+id+'">Accomplishment bullets — one per line</label>'
+    + '<div class="hint">'+GUIDING.projectBullets+'</div>'
+    + '<textarea id="proj-bul-'+id+'" data-path="projects.'+id+'.bullets" data-coach="bullets" rows="5" placeholder="Integrated occupational data with academic program recommendations to support career decision-making.">'+esc(p.bullets)+'</textarea>'
+    + '<div class="coach-feedback" id="proj-bul-'+id+'-feedback"></div>'
+    + '</div>';
+}
+
+function renderProjectsTab(){
+  let html = '<div class="section-head"><h2>Projects</h2><div class="guide">Optional — great for coursework, capstones, volunteer builds, or personal projects that show skills your job history might not capture.</div></div>';
+  html += state.projectsOrder.map((id,i)=>projectCard(id,i)).join("");
+  html += '<button type="button" class="add-btn" onclick="addEntry(\'projects\')">+ Add a project</button>';
+  return html;
+}
+
 function leadershipCard(id, index){
   const e = state.leadership[id];
   return '<div class="entry-card"><div class="entry-head"><span class="entry-num">ENTRY '+(index+1)+'</span>'
@@ -1031,6 +1090,7 @@ function collectAllFlags(){
   const tally = (flags)=>{ flags.forEach(f=>{ if(f.level==="red") totals.red++; else if(f.level==="amber") totals.amber++; }); };
   tally(analyzeSummary(state.summary));
   state.experienceOrder.forEach(id => tally(analyzeBulletsBlock(state.experience[id].bullets)));
+  state.projectsOrder.forEach(id => tally(analyzeBulletsBlock(state.projects[id].bullets)));
   state.leadershipOrder.forEach(id => tally(analyzeBulletsBlock(state.leadership[id].bullets)));
   return totals;
 }
@@ -1084,12 +1144,14 @@ function addEntry(kind){
   const id = genId(kind[0]);
   if(kind==="experience"){ state.experience[id] = freshExperience(); state.experienceOrder.push(id); }
   if(kind==="education"){ state.education[id] = freshEducation(); state.educationOrder.push(id); }
+  if(kind==="projects"){ state.projects[id] = freshProject(); state.projectsOrder.push(id); }
   if(kind==="leadership"){ state.leadership[id] = freshLeadership(); state.leadershipOrder.push(id); }
   persist(); renderAll();
 }
 function removeEntry(kind, id){
   if(kind==="experience"){ delete state.experience[id]; state.experienceOrder = state.experienceOrder.filter(x=>x!==id); }
   if(kind==="education"){ delete state.education[id]; state.educationOrder = state.educationOrder.filter(x=>x!==id); }
+  if(kind==="projects"){ delete state.projects[id]; state.projectsOrder = state.projectsOrder.filter(x=>x!==id); }
   if(kind==="leadership"){ delete state.leadership[id]; state.leadershipOrder = state.leadershipOrder.filter(x=>x!==id); }
   persist(); renderAll();
 }
@@ -1104,6 +1166,7 @@ function renderFormPanel(){
     case "summary": panel.innerHTML = renderSummaryTab(); break;
     case "experience": panel.innerHTML = renderExperienceTab(); break;
     case "education": panel.innerHTML = renderEducationTab(); break;
+    case "projects": panel.innerHTML = renderProjectsTab(); break;
     case "leadership": panel.innerHTML = renderLeadershipTab(); break;
     case "additional": panel.innerHTML = renderAdditionalTab(); break;
     case "job": panel.innerHTML = renderJobTab(); break;
@@ -1155,7 +1218,7 @@ document.addEventListener('input', function(e){
   if(!loaded) seedIfEmpty();
   else {
     // recompute idCounter so future genId() calls don't collide with restored ids
-    const allIds = [].concat(state.experienceOrder||[], state.educationOrder||[], state.leadershipOrder||[]);
+    const allIds = [].concat(state.experienceOrder||[], state.educationOrder||[], state.projectsOrder||[], state.leadershipOrder||[]);
     allIds.forEach(id => { const n = parseInt(id.slice(1),10); if(!isNaN(n) && n > idCounter) idCounter = n; });
     seedIfEmpty();
   }
