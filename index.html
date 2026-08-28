@@ -260,7 +260,7 @@
     <button class="btn btn-ghost btn-small" onclick="document.getElementById('loadFileInput').click()">Load saved file</button>
     <input type="file" id="loadFileInput" accept="application/json" onchange="loadProgressFile(this)">
     <button class="btn btn-ghost btn-small" onclick="saveProgressFile()">Save backup file</button>
-    <button class="btn btn-outline btn-small" onclick="window.print()">Print / Save PDF</button>
+    <button class="btn btn-outline btn-small" onclick="printResume()">Print / Save PDF</button>
     <button class="btn btn-primary" onclick="downloadWord()">Download Word Resume</button>
   </div>
 </header>
@@ -803,6 +803,10 @@ function buildWordDocument(){
     + "<style>@page{size:8.5in 11in;margin:0.75in;} body{font-family:Aptos,Arial,sans-serif;}</style>"
     + "</head><body>" + inner + "</body></html>";
 }
+function printResume(){
+  alert("Before it opens: in the print dialog, click \"More settings\" and uncheck \"Headers and footers.\" That removes the date and web address your browser normally adds to printed pages \u2014 it's a browser setting, not part of your resume.");
+  window.print();
+}
 function downloadWord(){
   const doc = buildWordDocument();
   const blob = new Blob(['\ufeff', doc], {type:"application/msword"});
@@ -1122,7 +1126,7 @@ function renderReviewTab(){
 
   html += '<div class="review-block"><h3>Export</h3>'
     + '<button class="btn btn-primary" onclick="downloadWord()">Download Word Resume (.doc)</button> '
-    + '<button class="btn btn-outline" onclick="window.print()">Print / Save as PDF</button>'
+    + '<button class="btn btn-outline" onclick="printResume()">Print / Save as PDF</button>'
     + '<p class="footer-note">The Word file opens directly in Microsoft Word or Google Docs. In Word, use "Save As" → .docx to convert it to the standard editable format.</p>'
     + '<p class="footer-note">When printing/saving as PDF, if your browser\'s print preview shows a title and date at the top of the page, open "More settings" in the print dialog and uncheck "Headers and footers" — that\'s a browser setting, not part of the resume.</p>'
     + '</div>';
