@@ -250,6 +250,63 @@
   .ai-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;}
   .ai-status{margin-top:7px;font-size:0.76rem;color:var(--slate);}
 
+
+  /* ---------- Mobile guided workflow ---------- */
+  .mobile-workflow-bar,.mobile-preview{display:none;}
+  @media (max-width:760px){
+    body{padding-bottom:76px;}
+    header.top{padding:10px 12px;gap:9px;}
+    header.top .brand{gap:9px;min-width:0;align-items:center;}
+    header.top .brand img{height:34px;padding:3px 6px;}
+    header.top .title-block{min-width:0;}
+    header.top .title-block h1{font-size:1rem;line-height:1.15;}
+    header.top .title-block p{display:none;}
+    header.top .actions{width:100%;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin;}
+    header.top .actions .btn{flex:0 0 auto;white-space:nowrap;padding:7px 10px;font-size:.74rem;}
+
+    .app{display:block;min-height:auto;}
+    .rail{position:sticky;top:0;z-index:20;display:flex;overflow-x:auto;padding:8px 10px;gap:7px;border-right:0;border-bottom:1px solid var(--line);background:#F1EEE6;box-shadow:0 2px 8px rgba(30,42,61,.08);scrollbar-width:none;}
+    .rail::-webkit-scrollbar{display:none;}
+    .rail .tab{width:auto;flex:0 0 auto;border:1px solid var(--line);border-left:1px solid var(--line);border-radius:999px;background:#fff;padding:8px 11px;font-size:.76rem;gap:6px;white-space:nowrap;}
+    .rail .tab.active{border:2px solid var(--kraft-dark);background:#FFFDF9;padding:7px 10px;}
+    .rail .tab .opt{display:none;}
+    .rail .tab .dot{width:7px;height:7px;}
+
+    .form-col{padding:20px 14px 24px;overflow:visible;}
+    .section-head{margin-bottom:14px;}
+    .section-head h2{font-size:1.2rem;}
+    .section-head .guide{font-size:.8rem;}
+    input[type=text],input[type=email],input[type=tel],textarea{font-size:16px;padding:11px 12px;margin-bottom:13px;}
+    textarea{min-height:92px;}
+    .entry-card{padding:14px 12px;margin-bottom:14px;}
+    .btn{min-height:42px;}
+    .btn-small{min-height:38px;padding:8px 11px;}
+    .add-btn{min-height:46px;}
+    .ai-polish{padding:12px 10px;}
+    .ai-polish-head{align-items:stretch;}
+    .ai-polish-head .btn{width:100%;}
+    .ai-actions{display:grid;grid-template-columns:1fr;}
+    .ai-actions .btn{width:100%;}
+
+    .preview-col{display:none;}
+    .mobile-workflow-bar{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(255,255,255,.97);border-top:1px solid var(--line);padding:9px 10px calc(9px + env(safe-area-inset-bottom));box-shadow:0 -4px 16px rgba(30,42,61,.12);}
+    .mobile-workflow-bar button{min-height:46px;border-radius:8px;font-size:.78rem;font-weight:700;}
+    .mobile-workflow-bar .mobile-prev{text-align:left;}
+    .mobile-workflow-bar .mobile-next{text-align:right;}
+    .mobile-workflow-bar .mobile-preview-btn{padding-left:12px;padding-right:12px;}
+    .mobile-workflow-bar button:disabled{opacity:.4;cursor:not-allowed;}
+
+    .mobile-preview{position:fixed;inset:0;z-index:100;background:#EAE7DE;overflow:auto;padding:0 0 28px;}
+    .mobile-preview.open{display:block;}
+    .mobile-preview-head{position:sticky;top:0;z-index:2;background:var(--collin-blue);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-bottom:3px solid var(--kraft);}
+    .mobile-preview-head strong{font-family:var(--serif);font-size:1rem;}
+    .mobile-preview-head button{background:#fff;color:var(--collin-blue);border:0;border-radius:6px;padding:8px 11px;font-weight:700;}
+    .mobile-preview .paper{margin:14px 10px 0;padding:24px 20px;min-height:0;box-shadow:0 2px 12px rgba(30,42,61,.16);font-size:9.7pt;}
+    .mobile-preview .r-name{font-size:17pt;}
+    .mobile-preview .r-h{font-size:11.5pt;}
+    body.preview-open{overflow:hidden;}
+  }
+
   @media print{
     header.top,.rail,.form-col,.preview-label,.save-status{display:none !important;}
     .app{display:block;}
@@ -287,6 +344,19 @@
     </div>
     <div class="paper" id="previewPanel"></div>
   </aside>
+</div>
+
+<div class="mobile-workflow-bar" id="mobileWorkflowBar" aria-label="Resume section navigation">
+  <button type="button" class="btn btn-outline mobile-prev" id="mobilePrevBtn" onclick="mobileStep(-1)">← Previous</button>
+  <button type="button" class="btn btn-outline mobile-preview-btn" onclick="openMobilePreview()">Preview</button>
+  <button type="button" class="btn btn-primary mobile-next" id="mobileNextBtn" onclick="mobileStep(1)">Save &amp; Continue →</button>
+</div>
+<div class="mobile-preview" id="mobilePreview" role="dialog" aria-modal="true" aria-labelledby="mobilePreviewTitle">
+  <div class="mobile-preview-head">
+    <strong id="mobilePreviewTitle">Resume Preview</strong>
+    <button type="button" onclick="closeMobilePreview()">Back to Editing</button>
+  </div>
+  <div class="paper" id="mobilePreviewPanel"></div>
 </div>
 
 <script>
@@ -877,6 +947,50 @@ function renderRail(){
 function switchTab(id){
   state.activeTab = id;
   renderAll();
+  if(window.matchMedia('(max-width:760px)').matches){
+    window.scrollTo({top:0,behavior:'smooth'});
+    requestAnimationFrame(scrollActiveMobileTabIntoView);
+  }
+}
+
+function scrollActiveMobileTabIntoView(){
+  if(!window.matchMedia('(max-width:760px)').matches) return;
+  const active=document.querySelector('#rail .tab.active');
+  if(active) active.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+}
+function mobileStep(delta){
+  const idx=TABS.findIndex(t=>t.id===state.activeTab);
+  const next=Math.max(0,Math.min(TABS.length-1,idx+delta));
+  if(next===idx) return;
+  state.activeTab=TABS[next].id;
+  persist();
+  renderAll();
+  window.scrollTo({top:0,behavior:'smooth'});
+  requestAnimationFrame(scrollActiveMobileTabIntoView);
+}
+function updateMobileWorkflow(){
+  const idx=TABS.findIndex(t=>t.id===state.activeTab);
+  const prev=document.getElementById('mobilePrevBtn');
+  const next=document.getElementById('mobileNextBtn');
+  if(!prev||!next) return;
+  prev.disabled=idx<=0;
+  next.disabled=idx>=TABS.length-1;
+  prev.textContent=idx>0?'← '+TABS[idx-1].label:'← Previous';
+  next.textContent=idx<TABS.length-1?'Save & Continue →':'Complete';
+}
+function openMobilePreview(){
+  const modal=document.getElementById('mobilePreview');
+  const panel=document.getElementById('mobilePreviewPanel');
+  if(!modal||!panel) return;
+  panel.innerHTML=buildResumeInnerHTML();
+  modal.classList.add('open');
+  document.body.classList.add('preview-open');
+  modal.scrollTop=0;
+}
+function closeMobilePreview(){
+  const modal=document.getElementById('mobilePreview');
+  if(modal) modal.classList.remove('open');
+  document.body.classList.remove('preview-open');
 }
 
 /* =====================================================================
@@ -1251,6 +1365,7 @@ function renderAll(){
   renderRail();
   renderFormPanel();
   renderPreview();
+  updateMobileWorkflow();
   document.title = state.contact.name ? (state.contact.name + " — Resume") : "Resume Builder & Job-Match Coach";
 }
 
@@ -1263,6 +1378,14 @@ document.addEventListener('input', function(e){
   renderRail();
   if(path === "contact.name") document.title = e.target.value ? (e.target.value + " — Resume") : "Resume Builder & Job-Match Coach";
   if(e.target.hasAttribute('data-coach')) updateCoachFeedback(e.target);
+});
+
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape') closeMobilePreview();
+});
+window.addEventListener('resize', function(){
+  if(!window.matchMedia('(max-width:760px)').matches) closeMobilePreview();
+  updateMobileWorkflow();
 });
 
 /* =====================================================================
