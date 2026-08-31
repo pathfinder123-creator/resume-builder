@@ -313,6 +313,14 @@
     .preview-col{background:#fff;padding:0;border:none;}
     .paper{box-shadow:none;padding:0;min-height:0;}
   }
+
+.align-input-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;background:#fff;padding:12px;font:inherit;font-size:.85rem;}
+.align-confirm{display:flex;align-items:flex-start;gap:10px;font-weight:normal;line-height:1.5;margin:14px 0;}
+.align-confirm input{width:auto;flex:0 0 auto;margin-top:5px;}
+.align-finding p{font-size:.87rem;line-height:1.5;overflow-wrap:anywhere;}
+#alignmentReport h4{color:var(--collin-blue);margin-top:20px;}
+#jobUrl{margin-bottom:10px;}
+@media(max-width:760px){#alignmentReport .btn,.ai-polish>.btn{width:100%;} .align-confirm{font-size:.9rem;}}
 </style>
 </head>
 <body>
@@ -556,6 +564,7 @@ function seedIfEmpty(){
 const STORAGE_KEY = "resumeBuilderDraft_v1";
 const AI_POLISH_ENDPOINT = window.CAREER_TOOLS_AI_ENDPOINT || "https://pitch-builder.daniels75040.workers.dev/polish";
 function persist(){
+  alignmentInvalidate();
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     document.getElementById('saveStatus').textContent = "Saved to this browser at " + new Date().toLocaleTimeString();
@@ -610,6 +619,7 @@ function loadProgressFile(input){
 }
 function clearData(){
   if(!confirm("This clears everything in this browser. If you haven't saved a backup file, your info will be lost. Continue?")) return;
+  alignment.report=null; alignment.url=""; alignment.confirmedJob=""; alignment.message="";
   localStorage.removeItem(STORAGE_KEY);
   idCounter = 0;
   state = {
@@ -1236,13 +1246,7 @@ function renderAdditionalTab(){
     + '<textarea id="add-interests" data-path="additional.interests" rows="2" placeholder="Community theater, youth soccer coaching">'+esc(a.interests)+'</textarea>';
 }
 
-function renderJobTab(){
-  const r = matchKeywords();
-  return '<div class="section-head"><h2>Target Job</h2><div class="guide">Paste in the job posting text (not the URL). We\'ll pull out likely keywords and compare them to what\'s already in your resume — nothing gets added automatically.</div></div>'
-    + '<label for="jobText">Job posting text</label>'
-    + '<textarea id="jobText" data-path="jobPosting" data-coach="job" rows="10" placeholder="Paste the full job description here...">'+esc(state.jobPosting)+'</textarea>'
-    + '<div id="jobMatchArea">'+renderJobMatch(r)+'</div>';
-}
+function renderJobTab(){ return renderAlignmentJobTab(); }
 
 function renderJobMatch(r){
   if(!state.jobPosting.trim()) return '<p class="hint">Paste a job posting above to see a keyword comparison.</p>';
@@ -1300,7 +1304,7 @@ function renderReviewTab(){
     + '<button class="btn btn-outline btn-small" onclick="saveProgressFile()">Save a backup file</button> '
     + '<button class="btn btn-outline btn-small" onclick="document.getElementById(\'loadFileInput\').click()">Load a backup file</button> '
     + '<button class="btn btn-outline btn-small" onclick="clearData()" style="color:var(--red);border-color:var(--red);">Clear my data</button>'
-    + '<p class="footer-note">Your resume data stays in your browser unless you choose “Polish with AI.” When you do, only the Professional Summary text and a short list of locally extracted target-job terms are sent to the AI service for that request. On a shared or lab computer, save a backup file so you can pick this up later.</p>'
+    + '<p class="footer-note">Your resume data stays in your browser unless you choose an AI feature. “Polish with AI” sends the Professional Summary and a short list of job terms. “Run AI Alignment Review” sends your resume content (excluding Contact fields) and the job description to Cloudflare Workers AI. Identifying details typed outside Contact fields may remain. URL retrieval sends only the job URL. No AI feature changes your resume automatically. On a shared or lab computer, save a backup file so you can pick this up later.</p>'
     + '</div>';
 
   return html;
@@ -1387,6 +1391,96 @@ window.addEventListener('resize', function(){
   if(!window.matchMedia('(max-width:760px)').matches) closeMobilePreview();
   updateMobileWorkflow();
 });
+
+/* Optional Resume Alignment Review — no function here writes resume fields. */
+const alignment={url:'',confirmedJob:'',report:null,snapshot:'',busy:false,message:''};
+function alignmentResume(){
+  const parts=[];
+  const add=(label,value)=>{if(value && String(value).trim())parts.push(label+': '+String(value).trim());};
+  add('Professional summary',state.summary);add('Core skills',state.coreSkills);add('Key strengths',state.keyStrengths);add('Professional competencies',state.competencies);
+  for(const kind of ['experience','education','projects','leadership']){
+    for(const id of state[kind+'Order']){parts.push('\n'+kind.toUpperCase());for(const [k,v] of Object.entries(state[kind][id]))add(k,v);}
+  }
+  for(const [k,v] of Object.entries(state.additional))add(k,v);
+  return parts.join('\n');
+}
+function alignmentSnapshot(){return JSON.stringify([alignmentResume(),state.jobPosting]);}
+function alignmentInvalidate(){
+  if(alignment.report && alignment.snapshot!==alignmentSnapshot()){alignment.report=null;alignment.message='Your resume or posting changed. Run a new review for an up-to-date report.';}
+  if(alignment.confirmedJob!==state.jobPosting){alignment.confirmedJob='';const cb=document.getElementById('alignConfirm');if(cb)cb.checked=false;}
+  const box=document.getElementById('alignmentReport');if(box)box.innerHTML=alignmentReportHTML();
+  const status=document.getElementById('alignStatus');if(status)status.textContent=alignment.message;
+}
+function alignmentReportHTML(){
+  const report=alignment.report;
+  if(!report || alignment.snapshot!==alignmentSnapshot())return '';
+  const labels={match:'Clear matches',related:'Related wording / partial evidence',not_demonstrated:'Not demonstrated in this resume'};
+  let html='<h3>Resume Alignment Review</h3><p class="hint">Generated '+esc(new Date(report.generatedAt).toLocaleString())+'. This is an advisory review, not an ATS score or hiring prediction. Findings are not exhaustive; check every conclusion.</p>';
+  if(report.omitted)html+='<p class="flag amber">'+Number(report.omitted)+' finding(s) were omitted because their supporting text could not be verified. This report is partial.</p>';
+  for(const [category,label] of Object.entries(labels)){
+    const rows=report.findings.filter(f=>f.category===category);
+    html+='<h4>'+label+' ('+rows.length+')</h4>';
+    if(!rows.length)html+='<p class="hint">No verified findings returned in this category. This does not establish that there are none.</p>';
+    for(const f of rows){html+='<article class="entry-card align-finding"><b>'+esc(f.requirement)+'</b><p class="hint">Posting priority: '+esc(f.priority)+'</p><p><strong>Job posting:</strong> “'+esc(f.jobEvidence)+'”</p>';
+      html+=f.resumeEvidence?'<p><strong>Your resume:</strong> “'+esc(f.resumeEvidence)+'”</p>':'<p><strong>Your resume:</strong> No supporting evidence identified by this review. This does not mean you lack the skill.</p>';
+      html+='<p><strong>Keyword to review:</strong> '+esc(f.keyword)+'</p><p><strong>Suggested action:</strong> '+esc(f.recommendation)+'</p><p class="hint">'+(category==='not_demonstrated'?'Add this term or supporting evidence only if it accurately describes your qualifications.':'Supporting text was located in your resume; confirm it supports the full requirement before changing terminology.')+'</p></article>';
+    }
+  }
+  return html+'<button type="button" class="btn btn-outline" onclick="downloadAlignmentReport()">Download report (.txt)</button><p class="hint">Your resume has not been changed. This report is not included in your resume export.</p>';
+}
+function renderAlignmentJobTab(){
+  return '<div class="section-head"><h2>Target Job &amp; Resume Alignment</h2><div class="guide">Bring in a job posting, then review how your resume supports its requirements. Nothing is added to your resume automatically.</div></div>'
+  +'<label for="jobUrl">Job posting URL (optional)</label><input id="jobUrl" type="url" placeholder="https://…" value="'+esc(alignment.url)+'" oninput="alignment.url=this.value" maxlength="2048">'
+  +'<button type="button" class="btn btn-outline" '+(alignment.busy?'disabled':'')+' onclick="retrieveAlignmentJob()">Retrieve Job Posting</button><p class="hint">Public postings only. Some sites block access or require sign-in. If retrieval is unavailable, paste the job description below. Retrieval sends the URL, not your resume.</p>'
+  +'<label for="jobText">Job posting text — review or paste here</label><textarea id="jobText" data-path="jobPosting" data-coach="job" rows="10" placeholder="Paste the full job description here…">'+esc(state.jobPosting)+'</textarea>'
+  +'<section class="ai-polish" aria-label="Optional AI alignment review"><h3>Resume Alignment Review <span class="hint">(optional AI)</span></h3><p>Find clear matches, related wording, requirements not demonstrated, and keywords to consider.</p>'
+  +'<details><summary>Review the resume content that will be sent</summary><pre class="align-input-preview">'+esc(alignmentResume())+'</pre></details>'
+  +'<p class="hint">Choosing Run AI Alignment Review sends the resume content shown above and this job description to Cloudflare Workers AI. Contact fields are excluded; identifying details you typed elsewhere may remain. This feature does not store the report on a server. The report stays in this page until refresh unless downloaded.</p>'
+  +'<label class="align-confirm"><input type="checkbox" id="alignConfirm" '+(alignment.confirmedJob===state.jobPosting && state.jobPosting?'checked':'')+' onchange="alignment.confirmedJob=this.checked?state.jobPosting:\'\'"> I checked that the job text is the correct, complete posting and want to send the displayed content for this review.</label>'
+  +'<button type="button" class="btn btn-primary" '+(alignment.busy?'disabled':'')+' onclick="runAlignmentReview()">'+(alignment.busy?'Working…':'Run AI Alignment Review')+'</button><p id="alignStatus" role="status" aria-live="polite">'+esc(alignment.message)+'</p><div id="alignmentReport">'+alignmentReportHTML()+'</div></section>'
+  +'<details style="margin-top:18px"><summary>Quick keyword check — no AI / no content sent</summary><div id="jobMatchArea">'+renderJobMatch(matchKeywords())+'</div></details>';
+}
+async function alignmentRequest(path,body){
+  const endpoint=new URL(AI_POLISH_ENDPOINT);endpoint.pathname=path;endpoint.search='';endpoint.hash='';
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),65000);
+  try{const response=await fetch(endpoint.toString(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error || 'The service is unavailable. Please try again later.');return data;
+  }catch(err){if(err.name==='AbortError')throw new Error('The request timed out. Please try again.');throw err;}finally{clearTimeout(timer);}
+}
+function alignmentRefresh(){if(state.activeTab==='job')renderFormPanel();}
+async function retrieveAlignmentJob(){
+  if(alignment.busy)return;
+  const raw=alignment.url.trim();try{if(new URL(raw).protocol!=='https:')throw new Error();}catch{alignment.message='Enter a complete HTTPS job posting URL, or paste the description below.';alignmentRefresh();return;}
+  if(state.jobPosting.trim() && !window.confirm('Replace the current job posting text with text from this URL? Your resume will not change.'))return;
+  const before=JSON.stringify(state);alignment.busy=true;alignment.message='Retrieving the job posting…';alignmentRefresh();
+  try{const data=await alignmentRequest('/job-posting',{url:raw});
+    if(JSON.stringify(state)!==before || alignment.url.trim()!==raw){alignment.message='Your inputs changed while retrieval was running. No text was replaced; retrieve again when ready.';return;}
+    if(typeof data.text!=='string' || data.text.length<100)throw new Error('No usable posting was returned. Paste the job description instead.');
+    state.jobPosting=data.text;alignment.confirmedJob='';alignment.report=null;persist();renderRail();
+    alignment.message='Posting retrieved. Check its title, employer, requirements, and completeness, remove unrelated page text, then confirm below.';
+  }catch(err){alignment.message=err.message+' Your existing text is unchanged.';}finally{alignment.busy=false;alignmentRefresh();}
+}
+async function runAlignmentReview(){
+  if(alignment.busy)return;
+  const resume=alignmentResume(),jobPosting=state.jobPosting.trim();
+  if(resume.trim().length<40 || resume.length>16000){alignment.message='Add meaningful resume content first (40–16,000 characters).';alignmentRefresh();return;}
+  if(jobPosting.length<100 || jobPosting.length>20000){alignment.message='Provide a job description containing 100–20,000 characters.';alignmentRefresh();return;}
+  if(alignment.confirmedJob!==state.jobPosting){alignment.message='Review the posting and select the confirmation checkbox before running AI.';alignmentRefresh();return;}
+  const snapshot=alignmentSnapshot();alignment.report=null;alignment.busy=true;alignment.message='Reviewing your resume against the posting. Your resume will not be changed…';alignmentRefresh();
+  try{const data=await alignmentRequest('/align',{resume,jobPosting});
+    if(snapshot!==alignmentSnapshot()){alignment.message='Your resume or job text changed during analysis. Run a new review; the outdated result was discarded.';return;}
+    if(!Array.isArray(data.findings) || !data.findings.length)throw new Error('No usable report was returned. Please try again.');
+    alignment.report=data;alignment.snapshot=snapshot;alignment.message='Review complete. Verify the findings against the supporting excerpts.';
+  }catch(err){alignment.message=err.message+' Your resume is unchanged; the local keyword check remains available.';}finally{alignment.busy=false;alignmentRefresh();}
+}
+function downloadAlignmentReport(){
+  if(!alignment.report || alignment.snapshot!==alignmentSnapshot())return;
+  const r=alignment.report;let text='RESUME ALIGNMENT REVIEW\n'+new Date(r.generatedAt).toLocaleString()+'\n\nAdvisory, partial review—not an ATS score or hiring prediction. Verify all conclusions. Your resume has not been changed.\n';
+  if(r.omitted)text+='\n'+r.omitted+' finding(s) omitted because supporting text could not be verified.\n';
+  for(const f of r.findings)text+='\n'+({match:'CLEAR MATCH',related:'RELATED / PARTIAL EVIDENCE',not_demonstrated:'NOT DEMONSTRATED IN THIS RESUME'}[f.category])+': '+f.requirement+'\nPriority: '+f.priority+'\nJob posting: '+f.jobEvidence+'\nResume: '+(f.resumeEvidence||'No supporting evidence identified; this does not mean you lack the skill.')+'\nKeyword: '+f.keyword+'\nSuggested action: '+f.recommendation+'\nOnly add wording or evidence if accurate.\n';
+  const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='resume-alignment-review.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 
 /* =====================================================================
    INIT
