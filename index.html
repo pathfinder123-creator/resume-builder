@@ -619,7 +619,7 @@ function loadProgressFile(input){
 }
 function clearData(){
   if(!confirm("This clears everything in this browser. If you haven't saved a backup file, your info will be lost. Continue?")) return;
-  alignment.report=null; alignment.url=""; alignment.confirmedJob=""; alignment.message="";
+  alignment.report=null; alignment.url=""; alignment.confirmedJob=""; alignment.message=""; alignment.retrievalMessage="";
   localStorage.removeItem(STORAGE_KEY);
   idCounter = 0;
   state = {
@@ -1393,7 +1393,7 @@ window.addEventListener('resize', function(){
 });
 
 /* Optional Resume Alignment Review — no function here writes resume fields. */
-const alignment={url:'',confirmedJob:'',report:null,snapshot:'',busy:false,message:''};
+const alignment={url:'',confirmedJob:'',report:null,snapshot:'',busy:false,message:'',retrievalMessage:''};
 function alignmentResume(){
   const parts=[];
   const add=(label,value)=>{if(value && String(value).trim())parts.push(label+': '+String(value).trim());};
@@ -1410,6 +1410,7 @@ function alignmentInvalidate(){
   if(alignment.confirmedJob!==state.jobPosting){alignment.confirmedJob='';const cb=document.getElementById('alignConfirm');if(cb)cb.checked=false;}
   const box=document.getElementById('alignmentReport');if(box)box.innerHTML=alignmentReportHTML();
   const status=document.getElementById('alignStatus');if(status)status.textContent=alignment.message;
+  const retrievalStatus=document.getElementById('retrievalStatus');if(retrievalStatus)retrievalStatus.textContent=alignment.retrievalMessage;
 }
 function alignmentReportHTML(){
   const report=alignment.report;
@@ -1431,7 +1432,7 @@ function alignmentReportHTML(){
 function renderAlignmentJobTab(){
   return '<div class="section-head"><h2>Target Job &amp; Resume Alignment</h2><div class="guide">Bring in a job posting, then review how your resume supports its requirements. Nothing is added to your resume automatically.</div></div>'
   +'<label for="jobUrl">Job posting URL (optional)</label><input id="jobUrl" type="url" placeholder="https://…" value="'+esc(alignment.url)+'" oninput="alignment.url=this.value" maxlength="2048">'
-  +'<button type="button" class="btn btn-outline" '+(alignment.busy?'disabled':'')+' onclick="retrieveAlignmentJob()">Retrieve Job Posting</button><p class="hint">Public postings only. Some sites block access or require sign-in. If retrieval is unavailable, paste the job description below. Retrieval sends the URL, not your resume.</p>'
+  +'<button type="button" class="btn btn-outline" '+(alignment.busy?'disabled':'')+' onclick="retrieveAlignmentJob()">Retrieve Job Posting</button><p id="retrievalStatus" role="status" aria-live="polite">'+esc(alignment.retrievalMessage)+'</p><p class="hint">Public postings only. Some sites block access or require sign-in. If retrieval is unavailable, paste the job description below. Retrieval sends the URL, not your resume.</p>'
   +'<label for="jobText">Job posting text — review or paste here</label><textarea id="jobText" data-path="jobPosting" data-coach="job" rows="10" placeholder="Paste the full job description here…">'+esc(state.jobPosting)+'</textarea>'
   +'<section class="ai-polish" aria-label="Optional AI alignment review"><h3>Resume Alignment Review <span class="hint">(optional AI)</span></h3><p>Find clear matches, related wording, requirements not demonstrated, and keywords to consider.</p>'
   +'<details><summary>Review the resume content that will be sent</summary><pre class="align-input-preview">'+esc(alignmentResume())+'</pre></details>'
@@ -1451,21 +1452,21 @@ async function alignmentRequest(path,body){
 function alignmentRefresh(){if(state.activeTab==='job')renderFormPanel();}
 async function retrieveAlignmentJob(){
   if(alignment.busy)return;
-  const raw=alignment.url.trim();try{if(new URL(raw).protocol!=='https:')throw new Error();}catch{alignment.message='Enter a complete HTTPS job posting URL, or paste the description below.';alignmentRefresh();return;}
+  const raw=alignment.url.trim();try{if(new URL(raw).protocol!=='https:')throw new Error();}catch{alignment.retrievalMessage='Enter a complete HTTPS job posting URL, or paste the description below.';alignmentRefresh();return;}
   if(state.jobPosting.trim() && !window.confirm('Replace the current job posting text with text from this URL? Your resume will not change.'))return;
-  const before=JSON.stringify(state);alignment.busy=true;alignment.message='Retrieving the job posting…';alignmentRefresh();
+  const before=JSON.stringify(state);alignment.busy=true;alignment.retrievalMessage='Retrieving the job posting…';alignmentRefresh();
   try{const data=await alignmentRequest('/job-posting',{url:raw});
-    if(JSON.stringify(state)!==before || alignment.url.trim()!==raw){alignment.message='Your inputs changed while retrieval was running. No text was replaced; retrieve again when ready.';return;}
+    if(JSON.stringify(state)!==before || alignment.url.trim()!==raw){alignment.retrievalMessage='Your inputs changed while retrieval was running. No text was replaced; retrieve again when ready.';return;}
     if(typeof data.text!=='string' || data.text.length<100)throw new Error('No usable posting was returned. Paste the job description instead.');
     state.jobPosting=data.text;alignment.confirmedJob='';alignment.report=null;persist();renderRail();
-    alignment.message='Posting retrieved. Check its title, employer, requirements, and completeness, remove unrelated page text, then confirm below.';
-  }catch(err){alignment.message=err.message+' Your existing text is unchanged.';}finally{alignment.busy=false;alignmentRefresh();}
+    alignment.retrievalMessage=(data.notice||'Posting retrieved.')+' Review and edit the text below before confirming it.';
+  }catch(err){alignment.retrievalMessage=err.message+' Your existing text is unchanged.';}finally{alignment.busy=false;alignmentRefresh();}
 }
 async function runAlignmentReview(){
   if(alignment.busy)return;
   const resume=alignmentResume(),jobPosting=state.jobPosting.trim();
   if(resume.trim().length<40 || resume.length>16000){alignment.message='Add meaningful resume content first (40–16,000 characters).';alignmentRefresh();return;}
-  if(jobPosting.length<100 || jobPosting.length>20000){alignment.message='Provide a job description containing 100–20,000 characters.';alignmentRefresh();return;}
+  if(jobPosting.length<100 || jobPosting.length>40000){alignment.message='Provide a job description containing 100–40,000 characters.';alignmentRefresh();return;}
   if(alignment.confirmedJob!==state.jobPosting){alignment.message='Review the posting and select the confirmation checkbox before running AI.';alignmentRefresh();return;}
   const snapshot=alignmentSnapshot();alignment.report=null;alignment.busy=true;alignment.message='Reviewing your resume against the posting. Your resume will not be changed…';alignmentRefresh();
   try{const data=await alignmentRequest('/align',{resume,jobPosting});
