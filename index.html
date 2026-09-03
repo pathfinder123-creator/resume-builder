@@ -86,8 +86,11 @@
   .app{display:grid;grid-template-columns:210px minmax(320px,1fr) 380px;min-height:calc(100vh - 66px);}
   @media (max-width:1080px){
     .app{grid-template-columns:1fr;}
-    .rail{display:flex;overflow-x:auto;padding:10px 12px;gap:8px;border-bottom:1px solid var(--line);}
-    .rail .tab{flex:0 0 auto;}
+    .rail{display:flex;overflow-x:auto;padding:10px 18px 10px 12px;gap:7px;border-right:0;border-bottom:1px solid var(--line);scroll-padding-inline:12px;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain;}
+    .rail .tab{width:auto;max-width:calc(100vw - 42px);min-height:44px;flex:0 0 auto;border:1px solid var(--line);border-left:1px solid var(--line);border-radius:999px;background:#fff;padding:8px 11px;font-size:.78rem;gap:6px;white-space:nowrap;scroll-snap-align:start;}
+    .rail .tab.active{border:2px solid var(--kraft-dark);background:#FFFDF9;padding:7px 10px;}
+    .rail .tab .opt{display:none;}
+    .rail .tab .dot{width:7px;height:7px;}
     .preview-col{border-top:6px solid var(--kraft);}
   }
 
@@ -957,16 +960,21 @@ function renderRail(){
 function switchTab(id){
   state.activeTab = id;
   renderAll();
+  if(window.matchMedia('(max-width:1080px)').matches){
+    requestAnimationFrame(scrollActiveMobileTabIntoView);
+  }
   if(window.matchMedia('(max-width:760px)').matches){
     window.scrollTo({top:0,behavior:'smooth'});
-    requestAnimationFrame(scrollActiveMobileTabIntoView);
   }
 }
 
 function scrollActiveMobileTabIntoView(){
-  if(!window.matchMedia('(max-width:760px)').matches) return;
-  const active=document.querySelector('#rail .tab.active');
-  if(active) active.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+  if(!window.matchMedia('(max-width:1080px)').matches) return;
+  const rail=document.getElementById('rail');
+  const active=rail&&rail.querySelector('.tab.active');
+  if(!rail||!active) return;
+  const left=active.offsetLeft-Math.max(12,(rail.clientWidth-active.offsetWidth)/2);
+  rail.scrollTo({left:Math.max(0,left),behavior:'smooth'});
 }
 function mobileStep(delta){
   const idx=TABS.findIndex(t=>t.id===state.activeTab);
