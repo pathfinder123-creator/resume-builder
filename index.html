@@ -310,6 +310,7 @@
     body.preview-open{overflow:hidden;}
   }
 
+  @page{size:letter;margin:0.75in;}
   @media print{
     header.top,.rail,.form-col,.preview-label,.save-status{display:none !important;}
     .app{display:block;}
@@ -900,7 +901,7 @@ function buildWordDocument(){
     + "</head><body>" + inner + "</body></html>";
 }
 function printResume(){
-  alert("Before it opens: in the print dialog, click \"More settings\" and uncheck \"Headers and footers.\" That removes the date and web address your browser normally adds to printed pages \u2014 it's a browser setting, not part of your resume.");
+  alert("PDF options: In the print dialog, choose Save as PDF. Under More settings, turn off Headers and footers to remove the browser-added date, page title, and URL. Keep Margins at Default (0.75-inch page margins are set by this tool); avoid Minimum or None. Check the preview before saving.");
   window.print();
 }
 function downloadWord(){
@@ -1305,7 +1306,7 @@ function renderReviewTab(){
     + '<button class="btn btn-primary" onclick="downloadWord()">Download Word Resume (.doc)</button> '
     + '<button class="btn btn-outline" onclick="printResume()">Print / Save as PDF</button>'
     + '<p class="footer-note">The Word file opens directly in Microsoft Word or Google Docs. In Word, use "Save As" → .docx to convert it to the standard editable format.</p>'
-    + '<p class="footer-note">When printing/saving as PDF, if your browser\'s print preview shows a title and date at the top of the page, open "More settings" in the print dialog and uncheck "Headers and footers" — that\'s a browser setting, not part of the resume.</p>'
+    + '<p class="footer-note">For PDF: choose Save as PDF, open More settings, turn off Headers and footers, and leave Margins at Default. The tool requests 0.75-inch margins; check the print preview before saving.</p>'
     + '</div>';
 
   html += '<div class="review-block"><h3>Your data</h3>'
