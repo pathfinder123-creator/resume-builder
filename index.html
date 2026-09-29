@@ -231,6 +231,28 @@
   .r-p{margin:0 0 4px 0;}
   .r-proj-title{font-weight:700;font-size:10.2pt;margin:8px 0 0 0;}
 
+  /* Resume spacing presets. Font sizes remain fixed. */
+  .paper.layout-spacious{line-height:1.48;}
+  .paper.layout-spacious .r-contact{margin-bottom:16px;}
+  .paper.layout-spacious .r-h-table{margin:20px 0 8px 0;}
+  .paper.layout-spacious .r-row-table{margin-top:10px;}
+  .paper.layout-spacious .r-title{margin:2px 0 5px 0;}
+  .paper.layout-spacious .r-ul{margin:3px 0 10px 0;}
+  .paper.layout-spacious .r-ul li{margin-bottom:3px;}
+  .paper.layout-spacious .r-p{margin-bottom:7px;}
+  .paper.layout-spacious .r-proj-title{margin-top:10px;}
+  .paper.layout-compact{line-height:1.2;}
+  .paper.layout-compact .r-contact{margin-bottom:10px;}
+  .paper.layout-compact .r-h-table{margin:12px 0 4px 0;}
+  .paper.layout-compact .r-row-table{margin-top:6px;}
+  .paper.layout-compact .r-title{margin:0 0 2px 0;}
+  .paper.layout-compact .r-ul{margin:1px 0 4px 0;}
+  .paper.layout-compact .r-ul li{margin-bottom:1px;}
+  .paper.layout-compact .r-p{margin-bottom:3px;}
+  .paper.layout-compact .r-proj-title{margin-top:5px;}
+  .resume-measure{position:absolute!important;left:-10000px!important;top:0!important;width:7in!important;min-height:0!important;padding:0!important;box-shadow:none!important;visibility:hidden!important;}
+  .layout-select{width:100%;max-width:290px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font:inherit;}
+
   .save-status{font-size:0.72rem;color:var(--slate);font-family:var(--mono);}
   .save-status button{background:none;border:none;color:var(--teal-dark);text-decoration:underline;font-size:0.72rem;font-family:var(--mono);padding:0;margin-left:8px;}
 
@@ -540,6 +562,7 @@ function genId(p){ return p + (++idCounter); }
 
 let state = {
   activeTab: "contact",
+  layoutMode: "auto",
   contact: { name:"", cityState:"", phone:"", email:"", linkedin:"" },
   summary: "",
   coreSkills: "", keyStrengths: "", competencies: "",
@@ -585,6 +608,7 @@ function loadFromStorage(){
       // patch in any fields added to the tool after this draft was saved
       if(!state.projects) state.projects = {};
       if(!state.projectsOrder) state.projectsOrder = [];
+      if(!["auto","spacious","standard","compact"].includes(state.layoutMode)) state.layoutMode = "auto";
       return true;
     }
   }catch(err){}
@@ -612,6 +636,7 @@ function loadProgressFile(input){
         return;
       }
       state = Object.assign({}, state, parsed);
+      if(!["auto","spacious","standard","compact"].includes(state.layoutMode)) state.layoutMode = "auto";
       persist();
       renderAll();
     }catch(err){
@@ -628,6 +653,7 @@ function clearData(){
   idCounter = 0;
   state = {
     activeTab:"contact",
+    layoutMode:"auto",
     contact:{name:"",cityState:"",phone:"",email:"",linkedin:""},
     summary:"", coreSkills:"", keyStrengths:"", competencies:"",
     experience:{}, experienceOrder:[], education:{}, educationOrder:[],
@@ -874,30 +900,79 @@ function buildResumeInnerHTML(){
   return html;
 }
 
+const LAYOUTS = {
+  spacious:{label:"Spacious",lineHeight:1.48,contact:16,headingTop:20,headingBottom:8,rowTop:10,titleBottom:5,listTop:3,listBottom:10,itemBottom:3,pBottom:7,projectTop:10},
+  standard:{label:"Standard",lineHeight:1.35,contact:14,headingTop:16,headingBottom:6,rowTop:8,titleBottom:3,listTop:2,listBottom:8,itemBottom:2,pBottom:8,projectTop:8},
+  compact:{label:"Compact",lineHeight:1.2,contact:10,headingTop:12,headingBottom:4,rowTop:6,titleBottom:2,listTop:1,listBottom:4,itemBottom:1,pBottom:3,projectTop:5}
+};
+const PRINTABLE_PAGE_HEIGHT = 9.5 * 96;
+function measureResume(layout){
+  const probe=document.createElement('div');
+  probe.className='paper layout-'+layout+' resume-measure';
+  probe.innerHTML=buildResumeInnerHTML();
+  document.body.appendChild(probe);
+  const height=probe.scrollHeight;
+  probe.remove();
+  return height;
+}
+function getEffectiveLayout(){
+  if(state.layoutMode && state.layoutMode!=="auto") return state.layoutMode;
+  if(measureResume("spacious") <= PRINTABLE_PAGE_HEIGHT * 0.96) return "spacious";
+  if(measureResume("standard") <= PRINTABLE_PAGE_HEIGHT) return "standard";
+  return "compact";
+}
+function layoutStatusText(layout){
+  const pages=Math.max(1,Math.ceil(measureResume(layout)/PRINTABLE_PAGE_HEIGHT));
+  if(state.layoutMode==="auto"){
+    if(layout==="spacious") return "Auto-fit selected Spacious spacing because the resume has room on one page.";
+    if(layout==="standard") return "Auto-fit selected Standard spacing to keep the resume near one page.";
+    if(pages===1) return "Auto-fit selected Compact spacing to keep the resume on one page.";
+    return "Auto-fit selected Compact spacing. The content needs about "+pages+" pages at a readable font size.";
+  }
+  return LAYOUTS[layout].label+" spacing is selected"+(pages>1?"; the content needs about "+pages+" pages.":" and fits on about one page.");
+}
+function setLayoutMode(value){ state.layoutMode=value; persist(); renderAll(); }
+function renderLayoutControls(){
+  const layout=getEffectiveLayout();
+  return '<div class="review-block"><h3>Page layout</h3>'
+    +'<label for="layoutModeSelect">Spacing</label>'
+    +'<select id="layoutModeSelect" class="layout-select" onchange="setLayoutMode(this.value)">'
+    +'<option value="auto"'+(state.layoutMode==='auto'?' selected':'')+'>Auto-fit (recommended)</option>'
+    +'<option value="spacious"'+(state.layoutMode==='spacious'?' selected':'')+'>Spacious</option>'
+    +'<option value="standard"'+(state.layoutMode==='standard'?' selected':'')+'>Standard</option>'
+    +'<option value="compact"'+(state.layoutMode==='compact'?' selected':'')+'>Compact</option></select>'
+    +'<p class="footer-note">'+esc(layoutStatusText(layout))+' Font sizes stay unchanged. Word may paginate slightly differently, so check the downloaded file.</p></div>';
+}
 function renderPreview(){
-  document.getElementById('previewPanel').innerHTML = buildResumeInnerHTML();
+  const panel=document.getElementById('previewPanel');
+  const layout=getEffectiveLayout();
+  panel.className='paper layout-'+layout;
+  panel.innerHTML=buildResumeInnerHTML();
 }
 
 /* =====================================================================
    WORD EXPORT (no external libraries — a Word-openable HTML document)
    ===================================================================== */
 function buildWordDocument(){
+  const layout=getEffectiveLayout();
+  const d=LAYOUTS[layout];
   const inner = buildResumeInnerHTML()
     .replace(/class="r-name"/g,'style="text-align:center;font-size:19pt;font-weight:bold;margin:0 0 2px 0;font-family:Aptos,Arial,sans-serif;"')
-    .replace(/class="r-contact"/g,'style="text-align:center;font-size:10pt;margin:0 0 14px 0;font-family:Aptos,Arial,sans-serif;"')
-    .replace(/class="r-h-table"/g,'style="width:100%;border-collapse:collapse;margin:16px 0 6px 0;" cellpadding="0" cellspacing="0"')
+    .replace(/class="r-contact"/g,'style="text-align:center;font-size:10pt;margin:0 0 '+d.contact+'px 0;font-family:Aptos,Arial,sans-serif;"')
+    .replace(/class="r-h-table"/g,'style="width:100%;border-collapse:collapse;margin:'+d.headingTop+'px 0 '+d.headingBottom+'px 0;" cellpadding="0" cellspacing="0"')
     .replace(/class="r-h"/g,'style="font-weight:bold;font-size:12.5pt;letter-spacing:0.5pt;border-bottom:1.4pt solid #111111;padding-bottom:2px;text-align:left;font-family:Aptos,Arial,sans-serif;"')
-    .replace(/class="r-row-table"/g,'style="width:100%;border-collapse:collapse;margin-top:8px;font-size:10.5pt;font-family:Aptos,Arial,sans-serif;" cellpadding="0" cellspacing="0"')
+    .replace(/class="r-row-table"/g,'style="width:100%;border-collapse:collapse;margin-top:'+d.rowTop+'px;font-size:10.5pt;font-family:Aptos,Arial,sans-serif;" cellpadding="0" cellspacing="0"')
     .replace(/class="r-right"/g,'style="text-align:right;white-space:nowrap;padding-left:12px;" align="right"')
-    .replace(/class="r-title"/g,'style="font-style:italic;font-size:10.5pt;margin:1px 0 3px 0;font-family:Aptos,Arial,sans-serif;"')
-    .replace(/class="r-ul"/g,'style="margin:2px 0 8px 0;padding-left:18px;font-size:10.5pt;font-family:Aptos,Arial,sans-serif;"')
-    .replace(/class="r-p"/g,'style="margin:0 0 8px 0;font-size:10.5pt;font-family:Aptos,Arial,sans-serif;"')
-    .replace(/class="r-proj-title"/g,'style="font-weight:bold;font-size:10.5pt;margin:8px 0 0 0;font-family:Aptos,Arial,sans-serif;"')
+    .replace(/class="r-title"/g,'style="font-style:italic;font-size:10.5pt;margin:1px 0 '+d.titleBottom+'px 0;font-family:Aptos,Arial,sans-serif;"')
+    .replace(/class="r-ul"/g,'style="margin:'+d.listTop+'px 0 '+d.listBottom+'px 0;padding-left:18px;font-size:10.5pt;line-height:'+d.lineHeight+';font-family:Aptos,Arial,sans-serif;"')
+    .replace(/<li>/g,'<li style="margin-bottom:'+d.itemBottom+'px;">')
+    .replace(/class="r-p"/g,'style="margin:0 0 '+d.pBottom+'px 0;font-size:10.5pt;line-height:'+d.lineHeight+';font-family:Aptos,Arial,sans-serif;"')
+    .replace(/class="r-proj-title"/g,'style="font-weight:bold;font-size:10.5pt;margin:'+d.projectTop+'px 0 0 0;font-family:Aptos,Arial,sans-serif;"')
     .replace(/r-empty/g,"");
   return "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>"
     + "<head><meta charset='utf-8'><title>Resume</title>"
     + "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->"
-    + "<style>@page{size:8.5in 11in;margin:0.75in;} body{font-family:Aptos,Arial,sans-serif;}</style>"
+    + "<style>@page{size:8.5in 11in;margin:0.75in;} body{font-family:Aptos,Arial,sans-serif;line-height:"+d.lineHeight+";}</style>"
     + "</head><body>" + inner + "</body></html>";
 }
 function printResume(){
@@ -1301,6 +1376,8 @@ function renderReviewTab(){
     + '<button type="button" class="btn btn-outline btn-small" onclick="showSummaryPolish(\'reviewSummaryPolishPanel\')">Polish my summary</button>'
     + '<div id="reviewSummaryPolishPanel"></div>'
     + '</div>';
+
+  html += renderLayoutControls();
 
   html += '<div class="review-block"><h3>Export</h3>'
     + '<button class="btn btn-primary" onclick="downloadWord()">Download Word Resume (.doc)</button> '
