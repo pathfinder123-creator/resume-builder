@@ -672,6 +672,13 @@ function clearData(){
 function esc(s){
   return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+function formatPhoneNumber(value){
+  const raw=String(value||"").trim();
+  const digits=raw.replace(/\D/g,"");
+  if(digits.length!==10) return raw;
+  if(raw.includes("-") && !raw.includes("(")) return digits.slice(0,3)+"-"+digits.slice(3,6)+"-"+digits.slice(6);
+  return "("+digits.slice(0,3)+") "+digits.slice(3,6)+"-"+digits.slice(6);
+}
 function getPath(obj, path){ return path.split(".").reduce((o,k)=> (o===undefined||o===null)?o:o[k], obj); }
 function setPath(obj, path, value){
   const parts = path.split(".");
@@ -825,7 +832,7 @@ function sectionHeading(text){
 }
 function buildResumeInnerHTML(){
   const c = state.contact;
-  const contactBits = [c.cityState, c.phone, c.email, c.linkedin].filter(Boolean).join(" | ");
+  const contactBits = [c.cityState, formatPhoneNumber(c.phone), c.email, c.linkedin].filter(Boolean).join(" | ");
   let html = "";
   html += '<p class="r-name">'+esc(c.name||"Your Name")+'</p>';
   html += '<p class="r-contact">'+ (contactBits ? esc(contactBits) : '<span class="r-empty">City, State | Phone | Email | LinkedIn</span>') +'</p>';
@@ -1092,7 +1099,10 @@ function closeMobilePreview(){
    ===================================================================== */
 function fieldInput(label, path, value, placeholder, type){
   type = type || "text";
-  return '<label>'+label+'<input type="'+type+'" data-path="'+path+'" value="'+esc(value)+'" placeholder="'+esc(placeholder||"")+'"></label>';
+  const isPhone=path==="contact.phone";
+  const shownValue=isPhone?formatPhoneNumber(value):value;
+  const phoneAttrs=isPhone?' inputmode="tel" autocomplete="tel"':'';
+  return '<label>'+label+'<input type="'+type+'" data-path="'+path+'" value="'+esc(shownValue)+'" placeholder="'+esc(placeholder||"")+'"'+phoneAttrs+'></label>';
 }
 
 function renderContactTab(){
@@ -1469,6 +1479,16 @@ document.addEventListener('input', function(e){
   if(path === "contact.name") document.title = e.target.value ? (e.target.value + " — Resume") : "Resume Builder & Job-Match Coach";
   if(e.target.hasAttribute('data-coach')) updateCoachFeedback(e.target);
 });
+
+document.addEventListener('blur', function(e){
+  if(e.target.getAttribute('data-path')!=="contact.phone") return;
+  const formatted=formatPhoneNumber(e.target.value);
+  e.target.value=formatted;
+  state.contact.phone=formatted;
+  persist();
+  renderPreview();
+  renderRail();
+}, true);
 
 document.addEventListener('keydown', function(e){
   if(e.key==='Escape') closeMobilePreview();
